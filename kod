@@ -1,0 +1,58 @@
+!pip install aiohttp aiofiles beautifulsoup4 nest_asyncio
+
+import aiohttp
+import aiofiles
+import asyncio
+from bs4 import BeautifulSoup
+import nest_asyncio
+
+nest_asyncio.apply()
+
+async def fetch(session, url):
+    try:
+        async with session.get(url) as response:
+            if response.status == 200:
+                return await response.text()
+            else:
+                print(f"Failed to fetch {url}: Status {response.status}")
+                return ""
+    except Exception as e:
+        print(f"Exception occurred while fetching {url}: {e}")
+        return ""
+
+async def extract_links(session, url):
+    html = await fetch(session, url)
+    if html:
+        soup = BeautifulSoup(html, 'html.parser')
+        links = [a.get('href') for a in soup.find_all('a', href=True)]
+        return links
+    return []
+
+async def write_links_to_file(links, file):
+    async with aiofiles.open(file, 'a') as f:
+        for link in links:
+            await f.write(link + '\n')
+
+async def main(urls, output_file):
+    async with aiohttp.ClientSession() as session:
+        tasks = [extract_links(session, url) for url in urls]
+        results = await asyncio.gather(*tasks)
+        
+        all_links = []
+        for links in results:
+            all_links.extend(links)
+        
+        await write_links_to_file(all_links, output_file)
+
+urls = [
+    "https://regex101.com/",
+    "https://docs.python.org/3/this-url-will-404.html",
+    "https://www.nytimes.com/guides/",
+    "https://www.mediamatters.org/",
+    "https://1.1.1.1/",
+    "https://www.politico.com/tipsheets/morning-money",
+    "https://www.bloomberg.com/markets/economics",
+    "https://www.ietf.org/rfc/rfc2616.txt"
+]
+output_file = 'found_links.txt'
+asyncio.run(main(urls, output_file))
